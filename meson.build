@@ -160,6 +160,7 @@ foreach compileflags :['-DBUILD_DATE=' + build_date_time,
                        '-DGIT_COMMIT_REV=' + conf.get('GIT_COMMIT_REV'),
                        '-DEDBG_BUILD_EBMC',
                        '-DEDBG_ISTEP_CTRL_FUNCTIONS',
+                       '-DEDBG_P10_SCOM_SUPPORT',
                        '-DECMD_DLL_FILE_FIXED=' + conf.get('ECMD_DLL_FILE')]
 
     add_global_arguments(compileflags, language : 'cpp')
