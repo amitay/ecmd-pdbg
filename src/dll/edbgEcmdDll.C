@@ -963,7 +963,7 @@ uint32_t queryConfigExistChips(const ecmdChipTarget & i_target, std::list<ecmdCh
   struct pdbg_target *chipTarget;
   uint32_t index;
 
-  pdbg_for_each_class_target("pib", chipTarget) {
+  pdbg_for_each_class_target("proc", chipTarget) {
 
     index = pdbg_target_index(chipTarget);
 
@@ -991,7 +991,15 @@ uint32_t queryConfigExistChips(const ecmdChipTarget & i_target, std::list<ecmdCh
     if (i_target.chipUnitTypeState == ECMD_TARGET_FIELD_VALID
         || i_target.chipUnitTypeState == ECMD_TARGET_FIELD_WILDCARD) {
       // Look for chipunits
-      rc = queryConfigExistChipUnits(i_target, chipTarget, chipData.chipUnitData, i_detail, i_allowDisabled);
+      rc = queryConfigExistChipUnits(chipTarget, chipData.chipUnitData, i_detail, i_allowDisabled);
+      if (rc) return rc;
+    }
+
+    // If the thread states are set, see what thread are in this chipUnit
+    if (i_target.threadState == ECMD_TARGET_FIELD_VALID
+        || i_target.threadState == ECMD_TARGET_FIELD_WILDCARD) {
+      // Look for chipunits
+      rc = queryConfigExistThreads(i_target, target, chipUnitData.threadData, i_detail, i_allowDisabled);
       if (rc) return rc;
     }
 
@@ -1002,77 +1010,45 @@ uint32_t queryConfigExistChips(const ecmdChipTarget & i_target, std::list<ecmdCh
   return rc;
 }
 
-uint32_t queryConfigExistChipUnits(const ecmdChipTarget & i_target, struct pdbg_target * i_pTarget, std::list<ecmdChipUnitData> & o_chipUnitData, ecmdQueryDetail_t i_detail, bool i_allowDisabled)  {
-  uint32_t rc = ECMD_SUCCESS;
-  ecmdChipUnitData chipUnitData;
+static void add_chip_units(struct pdbg_target *i_pTarget, const char *class_name, std::list<ecmdChipUnitData> & o_chipUnitData, ecmdQueryDetail_t i_detail, bool i_allowDisabled)
+{
   struct pdbg_target *target;
+  ecmdChipUnitData chipUnitData;
 
-  pdbg_for_each_child_target(i_pTarget, target) {
-#ifndef EDBG_P10_SCOM_SUPPORT
-    char *p;
-
-    p = (char *) pdbg_get_target_property(target, "ecmd,chip-unit-type", NULL);
-    if (!p || pdbg_target_index(target) < 0){
-      /* Skip targets with no ecmd equivalent */
-      continue;
-    }
-#endif
-
-    const char *className;
-    
-    className = pdbg_target_class_name(target);    
-    if (!className || pdbg_target_index(target) < 0){
-      /* Skip targets with no ecmd equivalent */
-      continue;
-    }
-
-    // If posState is set to VALID, check that our values match
-    // If posState is set to WILDCARD, we don't care
-    if ((i_target.chipUnitNumState == ECMD_TARGET_FIELD_VALID) &&
-        (pdbg_target_index(target) != i_target.chipUnitNum))
-      continue;
-
-#ifndef EDBG_P10_SCOM_SUPPORT
-    if ((i_target.chipUnitTypeState == ECMD_TARGET_FIELD_VALID) &&
-        (p != i_target.chipUnitType))
-      continue;
-   
-    std::string l_chipUnitType;
-    className = pdbg_target_class_name(target);
-    rc = p10x_convertPDBGClassString_to_CUString(className, l_chipUnitType);
-    if (rc){
-        out.error(rc, FUNCNAME, "Error converting pdbg class to CU string");
-    }
-#endif
-
-    if ((i_target.chipUnitTypeState == ECMD_TARGET_FIELD_VALID) &&
-        (className != i_target.chipUnitType)){
-      continue;
-    }
-
+  pdbg_for_each_target(class_name, i_pTarget, target) {
     pdbg_target_probe(target);
 
     // If i_allowDisabled isn't true, make sure it's not disabled
-    if (!i_allowDisabled)
-      if (pdbg_target_status(target) != PDBG_TARGET_ENABLED)
+    if (!i_allowDisabled && pdbg_target_status(target) != PDBG_TARGET_ENABLED)
 	continue;
 
-#ifndef EDBG_P10_SCOM_SUPPORT
-    chipUnitData.chipUnitType = p;
-#endif
-    chipUnitData.chipUnitType = className;
-    chipUnitData.chipUnitNum = pdbg_target_index(target);
+    if (pdbg_target_index(target) >= 0) {
+      chipUnitData.chipUnitType = class_name;
+      chipUnitData.chipUnitNum = pdbg_target_index(target);
 
-    // If the thread states are set, see what thread are in this chipUnit
-    if (i_target.threadState == ECMD_TARGET_FIELD_VALID
-        || i_target.threadState == ECMD_TARGET_FIELD_WILDCARD) {
-      // Look for chipunits
-      rc = queryConfigExistThreads(i_target, target, chipUnitData.threadData, i_detail, i_allowDisabled);
-      if (rc) return rc;
+      o_chipUnitData.push_back(chipUnitData);
     }
-
-    o_chipUnitData.push_back(chipUnitData);
   }
+}
+
+uint32_t queryConfigExistChipUnits(struct pdbg_target * i_pTarget, std::list<ecmdChipUnitData> & o_chipUnitData, ecmdQueryDetail_t i_detail, bool i_allowDisabled)  {
+  uint32_t rc = ECMD_SUCCESS;
+
+  add_chip_units(i_pTarget, "core", o_chipUnitData, i_detail, i_allowDisabled);
+  add_chip_units(i_pTarget, "eq", o_chipUnitData, i_detail, i_allowDisabled);
+  add_chip_units(i_pTarget, "pec", o_chipUnitData, i_detail, i_allowDisabled);
+  add_chip_units(i_pTarget, "phb", o_chipUnitData, i_detail, i_allowDisabled);
+  add_chip_units(i_pTarget, "mi", o_chipUnitData, i_detail, i_allowDisabled);
+  add_chip_units(i_pTarget, "mcc", o_chipUnitData, i_detail, i_allowDisabled);
+  add_chip_units(i_pTarget, "mcc", o_chipUnitData, i_detail, i_allowDisabled);
+  add_chip_units(i_pTarget, "omic", o_chipUnitData, i_detail, i_allowDisabled);
+  add_chip_units(i_pTarget, "omi", o_chipUnitData, i_detail, i_allowDisabled);
+  add_chip_units(i_pTarget, "chiplet", o_chipUnitData, i_detail, i_allowDisabled);
+  add_chip_units(i_pTarget, "mc", o_chipUnitData, i_detail, i_allowDisabled);
+  add_chip_units(i_pTarget, "nmmu", o_chipUnitData, i_detail, i_allowDisabled);
+  add_chip_units(i_pTarget, "iohs", o_chipUnitData, i_detail, i_allowDisabled);
+  add_chip_units(i_pTarget, "pau", o_chipUnitData, i_detail, i_allowDisabled);
+  add_chip_units(i_pTarget, "pauc", o_chipUnitData, i_detail, i_allowDisabled);
 
   return rc;
 }
