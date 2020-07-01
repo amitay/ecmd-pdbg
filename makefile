@@ -78,6 +78,7 @@ INCLUDES_DLL += edbgReturnCodes.H
 INCLUDES_DLL += lhtVpd.H
 INCLUDES_DLL += lhtVpdFile.H
 INCLUDES_DLL += lhtVpdDevice.H
+INCLUDES_DLL += edbgEcmdDllScom_p9.H
 ifeq (${EDBG_ISTEP_CONTROL}, yes)
     INCLUDES_DLL += edbgIstep.H
 endif
@@ -86,6 +87,7 @@ endif
 INCLUDES := ${INCLUDES_EXE} ${INCLUDES_DLL}
 
 # edbg source files to pull into the build
+SOURCES_DLL += edbgEcmdDllScom_p9.C
 SOURCES_DLL += edbgEcmdDll.C
 SOURCES_DLL += edbgEcmdDllInfo.C
 SOURCES_DLL += edbgOutput.C
@@ -432,9 +434,6 @@ endif
 	@cp ${ECMD_ROOT}/ecmd-core/ext/cip/cmd/help/cipgetmemproc.htxt ${INSTALL_PATH}/help/.
 	@cp ${ECMD_ROOT}/ecmd-core/ext/cip/cmd/help/cipputmemproc.htxt ${INSTALL_PATH}/help/.
 	@cp ${ECMD_ROOT}/out_${TARGET_ARCH}/bin/ecmd.htxt ${INSTALL_PATH}/help/.
-ifeq (${EDBG_ISTEP_CONTROL}, yes)
-	@cp ${EDBG_ROOT}/src/istep/p10/help/istep_list.htxt ${INSTALL_PATH}/help/.
-endif
 
 	@echo "Installing command wrappers ..."
 	@cp ${EDBG_ROOT}/bin/edbgWrapper.sh ${INSTALL_PATH}/bin/.

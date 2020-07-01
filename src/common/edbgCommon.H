@@ -43,4 +43,7 @@ extern std::string gEDBG_HOME;  // The variable is defined in edbgEcmdDll.C
 /* -------------------------------------- */
 extern edbgOutput out;  // The variable is defined at the bottom of edbgOutput.C
 
+#define CHIP_TYPE_P9  "p9"
+
+
 #endif /* edbgCommon_H */
