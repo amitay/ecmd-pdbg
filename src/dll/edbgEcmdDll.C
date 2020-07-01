@@ -61,12 +61,15 @@ extern "C" {
 #include <libekb.H>
 #endif
 
+#include "attributes_info.H"
+
 // Headers from ecmd-pdbg
 #include <edbgCommon.H>
 #include <edbgOutput.H>
 #include <lhtVpdFile.H>
 #include <lhtVpdDevice.H>
 #include <edbgEcmdDllScom_p9.H>
+#include <edbgEcmdDllScom_p10.H>
 
 // TODO: This needs to not be hardcoded and set from the command-line.
 std::string DEVICE_TREE_FILE;
@@ -118,6 +121,13 @@ static uint32_t fetchPdbgInterfaceTarget(const ecmdChipTarget & i_target, struct
 /* Given a target in i_target this will return the associcated pdbg pib target
  * that can be passed to pib_read/write() such that they will not perform any
  * address translations - ie. "raw" scom access as cronus calls it. */
+static uint32_t fetchPibTarget(const ecmdChipTarget & i_target, struct pdbg_target **o_pibTarget) {
+  if (fetchPdbgInterfaceTarget(i_target, o_pibTarget, "pib")) {
+    return out.error(-1, FUNCNAME, "Unable to find pib target in p%d\n", i_target.pos);
+  }
+
+  return 0;
+}
 
 static uint32_t fetchCfamTarget(const ecmdChipTarget & i_target, struct pdbg_target **o_pibTarget) {
   if (fetchPdbgInterfaceTarget(i_target, o_pibTarget, "fsi")) {
@@ -125,6 +135,36 @@ static uint32_t fetchCfamTarget(const ecmdChipTarget & i_target, struct pdbg_tar
   }
 
   return 0;
+}
+
+
+/* Given a target and a target base address return the chip unit type (eg. "ex",
+ * "mba", etc.) */
+static uint32_t findChipUnitType(const ecmdChipTarget &i_target, uint64_t i_address, struct pdbg_target **pdbgTarget)
+{
+  struct pdbg_target *pibTarget, *target;
+
+  if (fetchPibTarget(i_target, &pibTarget)) {
+    return out.error(-1, FUNCNAME, "Unable to find PIB target\n");
+  }
+
+  /* Need to mask off the indirect address if present */
+  i_address &= 0x7fffffff;
+
+  pdbg_for_each_child_target(pibTarget, target) {
+    uint64_t addr, size;
+
+    addr = pdbg_target_address(target, &size);
+    if (i_address >= addr && i_address < addr+size) {
+      if (pdbg_get_target_property(target, "ecmd,chip-unit-type", NULL)) {
+        // Found our base target
+        *pdbgTarget = target;
+        return 0;
+      }
+    }
+  }
+
+  return -1;
 }
 
 /**
@@ -142,6 +182,10 @@ static uint32_t getChipType(std::string &o_chipType) {
     switch (pdbg_get_proc()) {
 	case PDBG_PROC_P9:
 	    o_chipType = CHIP_TYPE_P9;
+            break;
+
+	case PDBG_PROC_P10:
+            o_chipType = CHIP_TYPE_P10;   
             break;
 
         default:
@@ -745,6 +789,16 @@ uint32_t queryConfigExistChips(const ecmdChipTarget & i_target, std::list<ecmdCh
       rc = queryConfigExistChipUnits(i_target, chipTarget, chipData.chipUnitData, i_detail, i_allowDisabled);
       if (rc) return rc;
     }
+    if (chipType == CHIP_TYPE_P10) {
+    
+      // If the thread states are set, see what thread are in this chipUnit
+      if (i_target.threadState == ECMD_TARGET_FIELD_VALID
+        || i_target.threadState == ECMD_TARGET_FIELD_WILDCARD) {
+        // Look for chipunits
+        rc = queryConfigExistThreads(i_target, chipTarget, chipUnitData.threadData, i_detail, i_allowDisabled);
+        if (rc) return rc;
+      }
+    }
     // Save what we got from recursing down, or just being happy at this level
     o_chipData.push_back(chipData);
   }
@@ -759,6 +813,7 @@ void addChipUnits(const ecmdChipTarget & i_target, struct pdbg_target *i_pTarget
   std::string cuString;
   ecmdChipTarget o_target;
 
+  p10x_convertPDBGClassString_to_CUString(class_name, cuString);
   pdbg_for_each_target(class_name.c_str(), i_pTarget, target) {
     
     //If posState is set to VALID, check that our values match
@@ -792,10 +847,25 @@ uint32_t queryConfigExistChipUnits(const ecmdChipTarget & i_target, struct pdbg_
   uint32_t rc = ECMD_SUCCESS;
   ecmdChipUnitData chipUnitData;
   struct pdbg_target *target;
+  uint32_t l_index;
 
+  if(chipType == CHIP_TYPE_P10)
+  {
+      for (l_index = 0;
+           l_index < (sizeof(ChipUnitTable) / sizeof(p10_chipUnit_t));
+           l_index++)
+      {
+          //If pdbg class type is pib , don't add the chip unit to the
+          //queryConfigExistChipUnits
+          if (ChipUnitTable[l_index].pdbgClassType != "pib") {
+              addChipUnits(i_target, i_pTarget, ChipUnitTable[l_index].pdbgClassType, 
+                           o_chipUnitData, i_detail, i_allowDisabled);
+          }
+      }
+  } 
   //FIXME: This logic needs to optimized. I will get the same p10 logic work on 
   //p9 as well. but, for now to not break the things keeping like this. 
-  if (chipType == CHIP_TYPE_P9) {
+  else if (chipType == CHIP_TYPE_P9) {
   
     pdbg_for_each_child_target(i_pTarget, target) {
     char *p;
@@ -991,6 +1061,8 @@ uint32_t dllQueryScom(const ecmdChipTarget & i_target, std::list<ecmdScomData> &
   
   if (chipType == CHIP_TYPE_P9) {
       rc = p9_dllQueryScom(i_target, o_queryData, i_address, i_detail);
+  } else if (chipType == CHIP_TYPE_P10) {
+      rc = p10_dllQueryScom(i_target, o_queryData, i_address, i_detail);
   } else {
      return ECMD_FUNCTION_NOT_SUPPORTED;
   }
@@ -1007,6 +1079,8 @@ uint32_t dllGetScom(const ecmdChipTarget & i_target, uint64_t i_address, ecmdDat
   
   if (chipType == CHIP_TYPE_P9) {
       rc = p9_dllGetScom(i_target,i_address,o_data);
+  } else if (chipType == CHIP_TYPE_P10) {
+      rc = p10_dllGetScom(i_target,i_address,o_data);
   } else {
      return ECMD_FUNCTION_NOT_SUPPORTED;
   }
@@ -1023,6 +1097,8 @@ uint32_t dllPutScom(const ecmdChipTarget & i_target, uint64_t i_address, const e
   
   if (chipType == CHIP_TYPE_P9) {
       rc = p9_dllPutScom(i_target,i_address,i_data);
+  } else if (chipType == CHIP_TYPE_P10) {
+      rc = p10_dllPutScom(i_target,i_address,i_data);
   } else {
      return ECMD_FUNCTION_NOT_SUPPORTED;
   }

@@ -37,7 +37,7 @@ TARGET_DLL := edbg.dll
 # Create a list of subdirectories for each repo where source will be found
 # Then use that list to create our include and vpath definitions
 ECMD_SRCDIRS := ecmd-core/capi ecmd-core/cmd ecmd-core/dll ecmd-core/ext/cip/capi ecmd-core/ext/cip/cmd ecmd-core/ext/fapi2/capi src_${TARGET_ARCH}
-EDBG_SRCDIRS := src/common src/dll src/vpd src/p9 src/p9/ekb
+EDBG_SRCDIRS := src/common src/dll src/vpd src/p9 src/p9/ekb src/p10/ekb
 ifeq (${EDBG_ISTEP_CONTROL}, yes)
     EDBG_SRCDIRS += src/istep
 endif
@@ -79,6 +79,7 @@ INCLUDES_DLL += lhtVpd.H
 INCLUDES_DLL += lhtVpdFile.H
 INCLUDES_DLL += lhtVpdDevice.H
 INCLUDES_DLL += edbgEcmdDllScom_p9.H
+INCLUDES_DLL += edbgEcmdDllScom_p10.H
 ifeq (${EDBG_ISTEP_CONTROL}, yes)
     INCLUDES_DLL += edbgIstep.H
 endif
@@ -88,6 +89,7 @@ INCLUDES := ${INCLUDES_EXE} ${INCLUDES_DLL}
 
 # edbg source files to pull into the build
 SOURCES_DLL += edbgEcmdDllScom_p9.C
+SOURCES_DLL += edbgEcmdDllScom_p10.C
 SOURCES_DLL += edbgEcmdDll.C
 SOURCES_DLL += edbgEcmdDllInfo.C
 SOURCES_DLL += edbgOutput.C
@@ -95,6 +97,8 @@ SOURCES_DLL += lhtVpd.C
 SOURCES_DLL += lhtVpdFile.C
 SOURCES_DLL += lhtVpdDevice.C
 SOURCES_DLL += p9_scominfo.C
+SOURCES_DLL += p10_scominfo.C
+SOURCES_DLL += p10_scom_addr.C
 # cip support files
 SOURCES_DLL += edbgCipDll.C
 # fapi2 support files
@@ -434,6 +438,9 @@ endif
 	@cp ${ECMD_ROOT}/ecmd-core/ext/cip/cmd/help/cipgetmemproc.htxt ${INSTALL_PATH}/help/.
 	@cp ${ECMD_ROOT}/ecmd-core/ext/cip/cmd/help/cipputmemproc.htxt ${INSTALL_PATH}/help/.
 	@cp ${ECMD_ROOT}/out_${TARGET_ARCH}/bin/ecmd.htxt ${INSTALL_PATH}/help/.
+ifeq (${EDBG_ISTEP_CONTROL}, yes)
+	@cp ${EDBG_ROOT}/src/istep/p10/help/istep_list.htxt ${INSTALL_PATH}/help/.
+endif
 
 	@echo "Installing command wrappers ..."
 	@cp ${EDBG_ROOT}/bin/edbgWrapper.sh ${INSTALL_PATH}/bin/.
