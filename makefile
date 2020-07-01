@@ -291,7 +291,7 @@ ${OBJS_EXE} ${OBJS_DLL} ${OBJS_ALL}: ${OBJPATH}%.o : %.C ${INCLUDES} | dir date
 # *****************************************************************************
 # Create the Target
 # *****************************************************************************
-LINK_LIBS := -L${PDBG_ROOT}/.libs -lpdbg -lfdt -lz -lyaml
+LINK_LIBS := -L${PDBG_ROOT}/.libs -lpdbg -lfdt -lz -lyaml -ldt-api
 ifeq (${EDBG_ISTEP_CONTROL}, yes)
     LINK_LIBS += -lipl -lekb
 endif
